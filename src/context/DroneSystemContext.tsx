@@ -1,7 +1,14 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { DroneData, TrafficAlert, SystemMetrics, Position } from '@/types/drone';
-import { generateMockDrones, generateMockAlerts, calculateSystemMetrics } from '@/utils/mockData';
+import { 
+  generateMockDrones, 
+  generateMockAlerts, 
+  calculateSystemMetrics, 
+  calculateFlightPath,
+  detectPathConflicts,
+  resolvePathConflicts
+} from '@/utils/mockData';
 
 interface DroneSystemContextType {
   drones: DroneData[];
@@ -59,6 +66,13 @@ export const DroneSystemProvider = ({ children }: { children: ReactNode }) => {
                 z: drone.position.z + (nextPosition.z - drone.position.z) * 0.1,
               };
               
+              // Update current layer based on altitude
+              if (updatedDrone.position.z <= 2) updatedDrone.currentLayer = 1;
+              else if (updatedDrone.position.z <= 4) updatedDrone.currentLayer = 2;
+              else if (updatedDrone.position.z <= 6) updatedDrone.currentLayer = 3;
+              else if (updatedDrone.position.z <= 8) updatedDrone.currentLayer = 4;
+              else updatedDrone.currentLayer = 5;
+              
               // If close enough to next waypoint, remove it
               if (
                 Math.abs(updatedDrone.position.x - nextPosition.x) < 0.1 &&
@@ -66,6 +80,22 @@ export const DroneSystemProvider = ({ children }: { children: ReactNode }) => {
                 Math.abs(updatedDrone.position.z - nextPosition.z) < 0.1
               ) {
                 updatedDrone.flightPath = drone.flightPath.slice(1);
+                
+                // Update operation phase based on waypoint transitions
+                if (updatedDrone.flightPath.length === 0) {
+                  // Flight complete
+                  updatedDrone.operationPhase = 'docked';
+                  updatedDrone.status = 'idle';
+                } else if (updatedDrone.position.z === 0 && updatedDrone.flightPath[0].z > 0) {
+                  // Just starting to take off
+                  updatedDrone.operationPhase = 'takeoff';
+                } else if (updatedDrone.flightPath[0].z === 0) {
+                  // About to land
+                  updatedDrone.operationPhase = 'landing';
+                } else if (updatedDrone.position.z >= 4) {
+                  // In transit at operational layers
+                  updatedDrone.operationPhase = 'transit';
+                }
               }
             }
             
@@ -73,6 +103,23 @@ export const DroneSystemProvider = ({ children }: { children: ReactNode }) => {
             if (updatedDrone.battery < 20 && updatedDrone.operationPhase !== 'returning' && updatedDrone.operationPhase !== 'landing') {
               updatedDrone.operationPhase = 'returning';
               updatedDrone.status = 'warning';
+              
+              // Emergency return to dock
+              const dockPosition = {
+                x: Math.ceil(drone.id / 4) * 3 - 1.5,
+                y: ((drone.id - 1) % 4 + 1) * 3 - 1.5,
+                z: 0
+              };
+              
+              // Create direct return path
+              updatedDrone.flightPath = [
+                // Move to transition layer if not already there
+                { x: updatedDrone.position.x, y: updatedDrone.position.y, z: 3 },
+                // Go directly to dock position at transition layer
+                { x: dockPosition.x, y: dockPosition.y, z: 3 },
+                // Descend to dock
+                { ...dockPosition }
+              ];
             }
             
             // Update last updated timestamp
@@ -82,6 +129,9 @@ export const DroneSystemProvider = ({ children }: { children: ReactNode }) => {
           return updatedDrone;
         });
       });
+      
+      // Detect potential conflicts between drones in flight
+      detectConflictsBetweenDrones();
       
       // Occasionally generate new alerts
       if (Math.random() < 0.2) {
@@ -112,6 +162,87 @@ export const DroneSystemProvider = ({ children }: { children: ReactNode }) => {
 
     return () => clearInterval(interval);
   }, []);
+  
+  // Function to detect conflicts between active drones
+  const detectConflictsBetweenDrones = () => {
+    // Get all active drones
+    const activeDrones = drones.filter(d => d.operationPhase !== 'docked');
+    
+    // Don't bother checking if less than 2 drones are active
+    if (activeDrones.length < 2) return;
+    
+    // Check for close proximity between any two drones
+    for (let i = 0; i < activeDrones.length; i++) {
+      for (let j = i + 1; j < activeDrones.length; j++) {
+        const drone1 = activeDrones[i];
+        const drone2 = activeDrones[j];
+        
+        // Calculate distance between drones
+        const horizontalDist = Math.sqrt(
+          Math.pow(drone1.position.x - drone2.position.x, 2) + 
+          Math.pow(drone1.position.y - drone2.position.y, 2)
+        );
+        
+        const verticalDist = Math.abs(drone1.position.z - drone2.position.z);
+        
+        // Check if drones are too close (within safety margin)
+        if (horizontalDist < 1.5 && verticalDist < 1.0) {
+          // Create conflict alert
+          const newAlert: TrafficAlert = {
+            id: `conflict-${Date.now()}`,
+            timestamp: new Date(),
+            severity: 'critical',
+            message: `Proximity warning between Drone ${drone1.id} and Drone ${drone2.id}`,
+            droneIds: [drone1.id, drone2.id],
+            resolved: false,
+          };
+          
+          // Add the alert if not already present
+          setAlerts(prev => {
+            if (!prev.some(a => 
+              !a.resolved && 
+              a.droneIds.includes(drone1.id) && 
+              a.droneIds.includes(drone2.id))
+            ) {
+              return [...prev, newAlert].slice(-10);
+            }
+            return prev;
+          });
+          
+          // Trigger evasive action for lower priority drone (lower ID yields)
+          if (drone1.id < drone2.id) {
+            executeEvasiveManeuver(drone1.id);
+          } else {
+            executeEvasiveManeuver(drone2.id);
+          }
+        }
+      }
+    }
+  };
+  
+  // Execute evasive maneuver for a drone
+  const executeEvasiveManeuver = (droneId: number) => {
+    setDrones(prevDrones => 
+      prevDrones.map(drone => {
+        if (drone.id === droneId) {
+          // Set status to warning
+          const updatedDrone = { ...drone, status: DroneStatus.WARNING };
+          
+          // If drone has flight path, modify it to hover in place temporarily
+          if (drone.flightPath && drone.flightPath.length > 0) {
+            // Hold position at current altitude for safety
+            updatedDrone.flightPath = [
+              { x: drone.position.x, y: drone.position.y, z: drone.position.z },
+              ...drone.flightPath
+            ];
+          }
+          
+          return updatedDrone;
+        }
+        return drone;
+      })
+    );
+  };
 
   const selectDrone = (droneId: number | null) => {
     if (!droneId) {
@@ -132,53 +263,65 @@ export const DroneSystemProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const planFlightPath = (droneId: number, targetPosition: Position) => {
-    setDrones(prevDrones => 
-      prevDrones.map(drone => {
-        if (drone.id === droneId) {
-          // Simple direct path for demonstration
-          const start = drone.position;
-          
-          // Generate waypoints for takeoff, transit, and landing
-          const waypoints: Position[] = [
-            // Takeoff - vertical movement to Layer 2
-            { x: start.x, y: start.y, z: 3 },
-            
-            // Transit - move to Layer 3/4 based on drone ID
-            { x: start.x, y: start.y, z: drone.id % 2 === 0 ? 4 : 6 },
-            
-            // Horizontal movement to target position
-            { x: targetPosition.x, y: targetPosition.y, z: drone.id % 2 === 0 ? 4 : 6 },
-            
-            // Descend to Layer 2 above target
-            { x: targetPosition.x, y: targetPosition.y, z: 3 },
-            
-            // Landing
-            { x: targetPosition.x, y: targetPosition.y, z: 0 },
-          ];
-          
-          return {
-            ...drone,
-            targetPosition,
-            flightPath: waypoints,
-            operationPhase: 'takeoff',
-            status: 'active',
-          };
-        }
-        return drone;
-      })
-    );
+    setDrones(prevDrones => {
+      // Find the current drone
+      const currentDrones = [...prevDrones];
+      const droneIndex = currentDrones.findIndex(d => d.id === droneId);
+      
+      if (droneIndex === -1) return prevDrones;
+      
+      const drone = currentDrones[droneIndex];
+      
+      // Calculate initial flight path
+      const start = drone.position;
+      const plannedPath = calculateFlightPath(start, targetPosition, droneId);
+      
+      // Check for conflicts with other drones' paths
+      const conflictingDrones = detectPathConflicts(currentDrones, plannedPath, droneId);
+      
+      // If conflicts found, try to resolve them
+      const finalPath = conflictingDrones.length > 0
+        ? resolvePathConflicts(plannedPath, droneId, conflictingDrones)
+        : plannedPath;
+        
+      // If conflicts were found, create an alert
+      if (conflictingDrones.length > 0) {
+        const newAlert: TrafficAlert = {
+          id: `path-conflict-${Date.now()}`,
+          timestamp: new Date(),
+          severity: 'warning',
+          message: `Path conflict resolved for Drone ${droneId}`,
+          droneIds: [droneId, ...conflictingDrones.map(d => d.id)],
+          resolved: true,
+        };
+        
+        setAlerts(prev => [...prev, newAlert].slice(-10));
+      }
+      
+      // Update the drone with new flight path and status
+      currentDrones[droneIndex] = {
+        ...drone,
+        targetPosition,
+        flightPath: finalPath,
+        operationPhase: 'takeoff',
+        status: 'active',
+      };
+      
+      return currentDrones;
+    });
   };
 
   const executeEmergencyProtocol = (droneId: number) => {
     setDrones(prevDrones => 
       prevDrones.map(drone => {
         if (drone.id === droneId) {
+          // Emergency landing - go directly to ground from current position
           return {
             ...drone,
             status: 'emergency',
             operationPhase: 'landing',
             flightPath: [
-              // Emergency landing - direct descent
+              // Emergency descent path - direct vertical path down
               { x: drone.position.x, y: drone.position.y, z: 0 },
             ],
           };
