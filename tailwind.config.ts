@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,7 +62,21 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
-				}
+				},
+				// Aviation-themed colors
+				airspace: {
+					layer1: '#e6f7ff',
+					layer2: '#bae7ff',
+					layer3: '#91d5ff',
+					layer4: '#69c0ff',
+					layer5: '#40a9ff',
+				},
+				drone: {
+					idle: '#52c41a',
+					active: '#1890ff',
+					warning: '#faad14',
+					emergency: '#f5222d',
+				},
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
@@ -70,25 +85,35 @@ export default {
 			},
 			keyframes: {
 				'accordion-down': {
-					from: {
-						height: '0'
-					},
-					to: {
-						height: 'var(--radix-accordion-content-height)'
-					}
+					from: { height: '0' },
+					to: { height: 'var(--radix-accordion-content-height)' }
 				},
 				'accordion-up': {
-					from: {
-						height: 'var(--radix-accordion-content-height)'
-					},
-					to: {
-						height: '0'
-					}
+					from: { height: 'var(--radix-accordion-content-height)' },
+					to: { height: '0' }
+				},
+				'pulse': {
+					'0%, 100%': { opacity: '1' },
+					'50%': { opacity: '0.5' },
+				},
+				'rotate': {
+					from: { transform: 'rotate(0deg)' },
+					to: { transform: 'rotate(360deg)' },
+				},
+				'fly': {
+					'0%': { transform: 'translateY(0) translateX(0)' },
+					'25%': { transform: 'translateY(-10px) translateX(10px)' },
+					'50%': { transform: 'translateY(0) translateX(20px)' },
+					'75%': { transform: 'translateY(10px) translateX(10px)' },
+					'100%': { transform: 'translateY(0) translateX(0)' },
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+				'rotate': 'rotate 5s linear infinite',
+				'fly': 'fly 8s ease-in-out infinite',
 			}
 		}
 	},
