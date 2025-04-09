@@ -2,7 +2,8 @@
 import React from 'react';
 import { DroneData } from '@/types/drone';
 import { Badge } from '@/components/ui/badge';
-import { Drone, Battery, Signal } from 'lucide-react';
+import { Battery, Signal } from 'lucide-react';
+import DroneIcon from './icons/DroneIcon';
 
 interface DroneDockProps {
   drone?: DroneData;
@@ -51,7 +52,7 @@ const DroneDock: React.FC<DroneDockProps> = ({ drone, isSelected, onClick }) => 
       
       <div className="h-full flex flex-col justify-between text-white">
         <div className="flex justify-between items-start">
-          <Drone className={`${drone.operationPhase !== 'docked' ? 'animate-fly' : ''}`} />
+          <DroneIcon className={`${drone.operationPhase !== 'docked' ? 'animate-fly' : ''}`} />
           <div className="flex flex-col items-end">
             <Battery className="h-4 w-4" />
             <span className="text-xs">{Math.round(drone.battery)}%</span>

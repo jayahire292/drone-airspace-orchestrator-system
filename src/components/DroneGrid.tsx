@@ -9,7 +9,7 @@ const DroneGrid = () => {
   return (
     <div className="p-4 border rounded-lg bg-slate-50 shadow-inner">
       <h2 className="text-lg font-semibold mb-4">Drone Dock Grid</h2>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {[...Array(16)].map((_, index) => {
           const droneId = index + 1;
           const drone = drones.find(d => d.id === droneId);
