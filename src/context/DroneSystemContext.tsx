@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { DroneData, TrafficAlert, SystemMetrics, Position } from '@/types/drone';
+import { DroneData, TrafficAlert, SystemMetrics, Position, DroneStatus } from '@/types/drone';
 import { 
   generateMockDrones, 
   generateMockAlerts, 
@@ -226,7 +226,7 @@ export const DroneSystemProvider = ({ children }: { children: ReactNode }) => {
       prevDrones.map(drone => {
         if (drone.id === droneId) {
           // Set status to warning
-          const updatedDrone = { ...drone, status: DroneStatus.WARNING };
+          const updatedDrone = { ...drone, status: 'warning' as DroneStatus };
           
           // If drone has flight path, modify it to hover in place temporarily
           if (drone.flightPath && drone.flightPath.length > 0) {
