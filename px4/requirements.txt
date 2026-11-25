@@ -1,0 +1,3 @@
+# gRPC MAVSDK API (either package works; mavsdk>=4 is a different API)
+mavsdk>=2.0,<4
+# or: mavsdk-grpc
